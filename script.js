@@ -1510,7 +1510,7 @@ class Player extends Ball {
     }
 
     takeDamage(amount) {
-        if (this.invulnerable) return;
+        if (this.invulnerable || this.isInvisible) return;
 
         this.health = Math.max(0, this.health - amount);
         this.invulnerable = true;
@@ -2622,76 +2622,3 @@ characterSelects.forEach(select => {
         });
     });
 });
-
-class GoldenSpear {
-    constructor(x, y, angle) {
-        this.x = x;
-        this.y = y;
-        this.angle = angle;
-        this.speed = 15;
-        this.width = 40;
-        this.height = 8;
-        this.active = true;
-    }
-
-    draw(ctx) {
-        if (!this.active) return;
-
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.angle);
-
-        // Draw spear shaft
-        ctx.fillStyle = '#FFD700'; // Golden color
-        ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
-
-        // Draw spear tip
-        ctx.beginPath();
-        ctx.moveTo(this.width/2, 0);
-        ctx.lineTo(this.width/2 + 15, -this.height);
-        ctx.lineTo(this.width/2 + 25, 0);
-        ctx.lineTo(this.width/2 + 15, this.height);
-        ctx.closePath();
-        ctx.fillStyle = '#DAA520'; // Darker gold for the tip
-        ctx.fill();
-
-        // Add glow effect
-        ctx.shadowColor = '#FFD700';
-        ctx.shadowBlur = 15;
-        ctx.strokeStyle = '#FFF8DC';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.restore();
-    }
-
-    update() {
-        if (!this.active) return;
-
-        this.x += Math.cos(this.angle) * this.speed;
-        this.y += Math.sin(this.angle) * this.speed;
-
-        // Check if spear is out of bounds
-        if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
-            this.active = false;
-        }
-    }
-
-    checkCollision(ball) {
-        if (!this.active || ball.broken || ball.inBin) return false;
-
-        const dx = ball.x - this.x;
-        const dy = ball.y - this.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance < ball.radius + 20) {
-            this.active = false;
-            ball.takeDamage(200);
-            // Apply weakness effect
-            ball.isWeakened = true;
-            ball.weakenedTimer = 300; // 5 seconds at 60 FPS
-            return true;
-        }
-        return false;
-    }
-}
