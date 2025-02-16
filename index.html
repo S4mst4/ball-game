@@ -81,9 +81,110 @@
             font-weight: bold;
             color: white;
         }
+        .party-interface {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            text-align: center;
+            display: none;
+        }
+        .code-input {
+            margin: 10px 0;
+            padding: 5px;
+            font-size: 16px;
+        }
+        .character-select {
+            display: none;
+            margin-top: 20px;
+        }
+        .character-option {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        .character-option:hover {
+            background-color: #45a049;
+        }
+        .join-party-btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .join-party-btn:hover {
+            background-color: #45a049;
+        }
+        .party-buttons {
+            display: flex;
+            gap: 10px;
+            margin: 10px;
+        }
+        .host-party-btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .host-party-btn:hover {
+            background-color: #45a049;
+        }
+        .code-display {
+            font-size: 24px;
+            font-weight: bold;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            color: #333;
+        }
+        .party-header {
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
+    <div class="party-buttons">
+        <button class="host-party-btn">Host Party</button>
+        <button class="join-party-btn">Join Party</button>
+    </div>
+    <div class="party-interface">
+        <h2 class="party-header">Enter Party Code</h2>
+        <div class="host-code-display" style="display: none;">
+            <h3>Your Party Code:</h3>
+            <div class="code-display"></div>
+            <h3>Choose Your Character:</h3>
+            <div class="character-select">
+                <button class="character-option" data-character="knight">KNIGHT</button>
+                <button class="character-option" data-character="mage">MAGE</button>
+            </div>
+        </div>
+        <div class="join-code-input">
+            <input type="text" class="code-input" placeholder="Enter code...">
+            <div class="character-select" style="display: none;">
+                <h3>Select Your Character</h3>
+                <button class="character-option" data-character="knight">KNIGHT</button>
+                <button class="character-option" data-character="mage">MAGE</button>
+            </div>
+        </div>
+    </div>
     <div class="container">
         <canvas id="canvas" width="1200" height="800"></canvas>
         <div class="sidebar">

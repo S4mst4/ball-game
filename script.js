@@ -23,15 +23,105 @@ class Ball {
         this.binY = 0;
         this.frozen = false;  // Add this new property
         this.frozenTimer = 0;
+        this.health = 300;  // Changed from 100 to 300 for regular balls
+        this.isPlayer = false;  // Flag to distinguish regular balls from players
+        this.isSpiky = false;
+        this.spikyTimer = 0;
+        this.rotationAngle = 0;  // Add rotation angle
+        this.rotationSpeed = 0;  // Add rotation speed
+        this.teleportCooldown = 0;  // Add teleport cooldown for spiky balls
     }
 
     draw(ctx) {
         if (this.isInvisible) return;
         
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
-        ctx.fill();
+        if (this.isSpiky) {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotationAngle);
+            
+            // Draw spiky ball
+            ctx.beginPath();
+            ctx.moveTo(this.radius * Math.cos(0), this.radius * Math.sin(0));
+            
+            // Draw spikes
+            for (let i = 0; i < 12; i++) {
+                const angle = (i * Math.PI * 2) / 12;
+                const spikeOuterAngle = angle + Math.PI / 12;
+                const spikeInnerAngle = angle - Math.PI / 12;
+                
+                // Outer spike point
+                const outerX = (this.radius * 1.5) * Math.cos(angle);
+                const outerY = (this.radius * 1.5) * Math.sin(angle);
+                
+                // Inner points for triangular spikes
+                const innerX1 = this.radius * Math.cos(spikeInnerAngle);
+                const innerY1 = this.radius * Math.sin(spikeInnerAngle);
+                const innerX2 = this.radius * Math.cos(spikeOuterAngle);
+                const innerY2 = this.radius * Math.sin(spikeOuterAngle);
+                
+                ctx.lineTo(innerX1, innerY1);
+                ctx.lineTo(outerX, outerY);
+                ctx.lineTo(innerX2, innerY2);
+            }
+            
+            ctx.closePath();
+            ctx.fillStyle = this.color;
+            ctx.fill();
+            
+            // Add sawblade effect
+            ctx.strokeStyle = '#808080';  // Metallic color for saw teeth
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Add glow effect
+            ctx.shadowColor = this.color;
+            ctx.shadowBlur = 10;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            ctx.restore();
+
+            // Draw health bar for spiky balls
+            const healthBarWidth = 30;  // Reduced from 50 to 30
+            const healthBarHeight = 4;  // Reduced from 6 to 4
+            const barX = this.x - healthBarWidth / 2;
+            const barY = this.y - this.radius * 2 - 10;  // Position higher above the ball
+
+            // Draw background (empty health bar)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';  // Darker background for spiky ball health bar
+            ctx.fillRect(barX, barY, healthBarWidth, healthBarHeight);
+
+            // Draw health fill
+            const healthPercentage = this.health / 500;  // Using 500 as max health for spiky balls
+            const fillWidth = healthBarWidth * healthPercentage;
+            
+            // Special color gradient for spiky ball health
+            let fillColor;
+            if (healthPercentage > 0.6) {
+                fillColor = '#FF4500';  // Orange-red for high health
+            } else if (healthPercentage > 0.3) {
+                fillColor = '#FF8C00';  // Dark orange for medium health
+            } else {
+                fillColor = '#FF0000';  // Red for low health
+            }
+
+            ctx.fillStyle = fillColor;
+            ctx.fillRect(barX, barY, fillWidth, healthBarHeight);
+
+            // Draw metallic border
+            ctx.strokeStyle = '#C0C0C0';  // Metallic silver border
+            ctx.lineWidth = 1;
+            ctx.strokeRect(barX, barY, healthBarWidth, healthBarHeight);
+        } else {
+            // Draw normal ball
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = this.color;
+            ctx.fill();
+        }
         
         // Draw shield if active
         if (this.hasShield) {
@@ -51,6 +141,40 @@ class Ball {
             ctx.stroke();
         }
         
+        // Draw health bar for regular balls (not players and not spiky)
+        if (!this.isPlayer && !this.broken && !this.inBin && !this.isSpiky) {
+            const healthBarWidth = 40;
+            const healthBarHeight = 4;
+            const barX = this.x - healthBarWidth / 2;
+            const barY = this.y - this.radius - 10;
+
+            // Draw background (empty health bar)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(barX, barY, healthBarWidth, healthBarHeight);
+
+            // Draw health fill
+            const healthPercentage = this.health / 300;
+            const fillWidth = healthBarWidth * healthPercentage;
+            
+            // Color gradient based on health
+            let fillColor;
+            if (healthPercentage > 0.6) {
+                fillColor = '#00FF00';  // Green for high health
+            } else if (healthPercentage > 0.3) {
+                fillColor = '#FFA500';  // Orange for medium health
+            } else {
+                fillColor = '#FF0000';  // Red for low health
+            }
+
+            ctx.fillStyle = fillColor;
+            ctx.fillRect(barX, barY, fillWidth, healthBarHeight);
+
+            // Draw border
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(barX, barY, healthBarWidth, healthBarHeight);
+        }
+        
         ctx.closePath();
     }
 
@@ -62,6 +186,13 @@ class Ball {
                     this.frozen = false;
                 }
                 return;  // Don't update position if frozen
+            }
+
+            // Don't process bin movement if the ball is spiky
+            if (this.isSpiky) {
+                this.broken = false;
+                this.inBin = false;
+                return;
             }
 
             if (this.inBin) {
@@ -76,6 +207,7 @@ class Ball {
                     this.originalY = newPos.y;
                     this.dx = getRandomSpeed();
                     this.dy = getRandomSpeed();
+                    this.health = 300;  // Restore full health when coming out of bin
                     
                     // Create simple revival effect
                     for (let i = 0; i < 10; i++) {
@@ -164,6 +296,8 @@ class Ball {
             balls.forEach(otherBall => {
                 if (otherBall === this) return;
                 if (this.isInvisible) return;
+                if (this.isSpiky) return; // Skip collision if this ball is spiky
+                if (otherBall.isSpiky) return; // Skip collision if other ball is spiky
 
                 const dx = otherBall.x - this.x;
                 const dy = otherBall.y - this.y;
@@ -211,6 +345,7 @@ class Ball {
                     this.originalY = newPos.y;
                     this.dx = getRandomSpeed();
                     this.dy = getRandomSpeed();
+                    this.health = 300;  // Restore full health when coming out of bin
                     
                     // Create simple revival effect
                     for (let i = 0; i < 10; i++) {
@@ -296,6 +431,8 @@ class Ball {
             balls.forEach(otherBall => {
                 if (otherBall === this) return;
                 if (this.isInvisible) return;
+                if (this.isSpiky) return; // Skip collision if this ball is spiky
+                if (otherBall.isSpiky) return; // Skip collision if other ball is spiky
 
                 const dx = otherBall.x - this.x;
                 const dy = otherBall.y - this.y;
@@ -355,12 +492,225 @@ class Ball {
                 }
             }
         });
+
+        // Add collision damage between balls
+        if (!this.isPlayer && !this.broken && !this.inBin) {
+            balls.forEach(otherBall => {
+                if (otherBall !== this && !otherBall.broken && !otherBall.inBin) {
+                    const dx = otherBall.x - this.x;
+                    const dy = otherBall.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < this.radius + otherBall.radius) {
+                        const speed = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
+                        if (speed > 15) { // Only damage on high-speed collisions
+                            this.takeDamage(speed * 2);
+                            otherBall.takeDamage(speed * 2);
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update spiky timer and rotation
+        if (this.isSpiky) {
+            this.rotationAngle += this.rotationSpeed; // Spin the spiky ball
+            this.spikyTimer--;
+            
+            // Handle teleportation
+            if (this.teleportCooldown > 0) {
+                this.teleportCooldown--;
+            } else {
+                // Teleport to a random position
+                const newPos = getRandomPosition(canvas, this.radius);
+                
+                // Create disappear effect at current position
+                for (let i = 0; i < 15; i++) {
+                    const particle = new Cloud(this.x, this.y);
+                    particle.color = this.color;
+                    const angle = (Math.PI * 2 * i) / 15;
+                    const speed = 6;
+                    particle.dx = Math.cos(angle) * speed;
+                    particle.dy = Math.sin(angle) * speed;
+                    particle.radius = 3;
+                    particle.fadeSpeed = 0.04;
+                    clouds.push(particle);
+                }
+                
+                this.x = newPos.x;
+                this.y = newPos.y;
+                
+                // Create appear effect at new position
+                for (let i = 0; i < 15; i++) {
+                    const particle = new Cloud(this.x, this.y);
+                    particle.color = this.color;
+                    const angle = (Math.PI * 2 * i) / 15;
+                    const speed = 6;
+                    particle.dx = Math.cos(angle) * speed;
+                    particle.dy = Math.sin(angle) * speed;
+                    particle.radius = 3;
+                    particle.fadeSpeed = 0.04;
+                    clouds.push(particle);
+                }
+                
+                // Heal 50 health
+                this.health = Math.min(300, this.health + 50);
+                
+                // Create healing effect
+                for (let i = 0; i < 10; i++) {
+                    const healParticle = new Cloud(this.x, this.y);
+                    healParticle.color = '#00FF00';  // Green healing particles
+                    healParticle.dx = (Math.random() - 0.5) * 4;
+                    healParticle.dy = (Math.random() - 0.5) * 4;
+                    healParticle.radius = 3;
+                    healParticle.fadeSpeed = 0.03;
+                    clouds.push(healParticle);
+                }
+                
+                this.teleportCooldown = 120; // Reset cooldown (2 seconds at 60fps)
+            }
+            
+            // Bounce off walls with more energy
+            if (this.x + this.radius > canvas.width || this.x - this.radius < 0) {
+                this.dx = -this.dx * 1.2;
+            }
+            if (this.y + this.radius > canvas.height || this.y - this.radius < 0) {
+                this.dy = -this.dy * 1.2;
+            }
+            
+            // Update position
+            this.x += this.dx;
+            this.y += this.dy;
+
+            // Check collision with other balls while spiky
+            balls.forEach(otherBall => {
+                if (otherBall !== this && !otherBall.broken && !otherBall.inBin && !otherBall.isSpiky) {
+                    const dx = otherBall.x - this.x;
+                    const dy = otherBall.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < this.radius * 1.5 + otherBall.radius) {
+                        if (otherBall.isPlayer) {
+                            // Deal 30 damage to players
+                            otherBall.takeDamage(30);
+                            
+                            // Create sawing effect
+                            for (let i = 0; i < 10; i++) {
+                                const spark = new Cloud(otherBall.x, otherBall.y);
+                                spark.color = '#FFA500';  // Orange sparks
+                                spark.dx = (Math.random() - 0.5) * 15;
+                                spark.dy = (Math.random() - 0.5) * 15;
+                                spark.radius = 2;
+                                spark.fadeSpeed = 0.05;
+                                clouds.push(spark);
+                            }
+                        }
+                        
+                        // Bounce off other balls with increased energy
+                        const angle = Math.atan2(dy, dx);
+                        const speed = Math.sqrt(this.dx * this.dx + this.dy * this.dy) * 1.1;
+                        this.dx = Math.cos(angle) * -speed;
+                        this.dy = Math.sin(angle) * -speed;
+                    }
+                }
+            });
+
+            if (this.spikyTimer <= 0) {
+                this.isSpiky = false;
+                this.rotationSpeed = 0;
+                // Reduce speed when returning to normal
+                this.dx *= 0.5;
+                this.dy *= 0.5;
+            }
+            return;
+        }
     }
 
     createCollisionCloud(ctx, x, y) {
         for (let i = 0; i < 5; i++) {
             const cloud = new Cloud(x, y);
             clouds.push(cloud);
+        }
+    }
+
+    // Add method to handle ball damage
+    takeDamage(amount) {
+        if (this.isPlayer) return; // Don't apply this to players
+        
+        this.health -= amount;
+        
+        // Create hit effect
+        for (let i = 0; i < 5; i++) {
+            const particle = new Cloud(this.x, this.y);
+            particle.color = this.color;
+            particle.dx = (Math.random() - 0.5) * 5;
+            particle.dy = (Math.random() - 0.5) * 5;
+            particle.radius = 2;
+            particle.fadeSpeed = 0.05;
+            clouds.push(particle);
+        }
+
+        // Turn ball spiky if damage is 10 or more and ball isn't already spiky
+        if (amount >= 10 && !this.isSpiky && !this.broken && !this.isPlayer) {  // Added !this.isPlayer check
+            // Store current velocity but increase it for more dynamic movement
+            const oldDx = this.dx * 1.5;
+            const oldDy = this.dy * 1.5;
+
+            // Create transformation effect
+            for (let i = 0; i < 360; i += 30) {
+                const angle = (i * Math.PI) / 180;
+                const shockwave = new Cloud(this.x, this.y);
+                shockwave.color = '#FFFFFF';
+                shockwave.dx = Math.cos(angle) * 12;
+                shockwave.dy = Math.sin(angle) * 12;
+                shockwave.radius = 2;
+                shockwave.fadeSpeed = 0.04;
+                clouds.push(shockwave);
+            }
+
+            // Make the ball spiky and set its movement
+            this.isSpiky = true;
+            this.spikyTimer = 600; // 10 seconds at 60fps
+            this.dx = oldDx * 0.25; // Quarter the speed for spiky balls (changed from 0.5)
+            this.dy = oldDy * 0.25;
+            this.rotationSpeed = 0.3; // Fast rotation speed
+            this.health = 500; // Set health to 500 when becoming spiky
+            this.broken = false; // Ensure the ball isn't marked as broken when becoming spiky
+            
+            // Add blood stain
+            const bloodStain = new BloodStain(this.x, this.y, this.color);
+            bloodStains.push(bloodStain);
+            return;
+        }
+
+        // Critical explosion at 10 health
+        if (this.health <= 10 && !this.broken && !this.isSpiky) {
+            // Create explosion effect
+            for (let i = 0; i < 20; i++) {
+                const angle = (Math.PI * 2 * i) / 20;
+                const speed = 8 + Math.random() * 4;
+                const particle = new Cloud(this.x, this.y);
+                particle.color = this.color;
+                particle.dx = Math.cos(angle) * speed;
+                particle.dy = Math.sin(angle) * speed;
+                particle.radius = 4;
+                particle.fadeSpeed = 0.02;
+                clouds.push(particle);
+            }
+
+            // Add shockwave
+            for (let i = 0; i < 360; i += 30) {
+                const angle = (i * Math.PI) / 180;
+                const particle = new Cloud(this.x, this.y);
+                particle.color = '#FFFFFF';
+                particle.dx = Math.cos(angle) * 12;
+                particle.dy = Math.sin(angle) * 12;
+                particle.radius = 2;
+                particle.fadeSpeed = 0.04;
+                clouds.push(particle);
+            }
+
+            this.broken = true;
         }
     }
 }
@@ -900,9 +1250,10 @@ class Player extends Ball {
         super(x, y, radius, '#C0C0C0', 0, 0);
         this.speed = 28;           // Changed from 14 to 28
         this.isPlayer = true;
-        this.speedBoostTimer = 0;
+        this.speedBoostActive = false;  // New flag for toggle state
         this.normalSpeed = 28;     // Changed from 14 to 28
         this.boostedSpeed = 56;    // Changed from 28 to 56
+        this.speedBoostCooldown = 0;
         this.shurikens = [];
         this.tridents = [];  // Add tridents array
         this.shurikenCooldown = 0;
@@ -921,6 +1272,7 @@ class Player extends Ball {
         this.waterSpears = [];  // Add water spears array
         this.waterSpearCooldown = 0;
         this.maxWaterSpears = 3;  // Maximum number of orbiting spears
+        this.waterSpearActive = false;  // New flag to track if water spears are active
     }
 
     update(canvas, balls) {
@@ -937,12 +1289,15 @@ class Player extends Ball {
             return;
         }
 
-        // Handle speed boost timer
+        // Handle speed boost timer and cooldown
         if (this.speedBoostTimer > 0) {
             this.speedBoostTimer--;
             if (this.speedBoostTimer <= 0) {
                 this.speed = this.normalSpeed;
             }
+        }
+        if (this.speedBoostCooldown > 0) {
+            this.speedBoostCooldown--;
         }
 
         // Only handle movement if this is the active player
@@ -1061,7 +1416,7 @@ class Player extends Ball {
             const distance = Math.sqrt(dx * dx + dy * dy);
             
             if (distance < this.radius + spike.size && !this.invulnerable) {
-                this.takeDamage(15);  // Spikes deal 15 damage
+                this.takeDamage(2);  // Spikes deal 2 damage
                 
                 // Create burst effect
                 for (let i = 0; i < 25; i++) {
@@ -1170,6 +1525,95 @@ class Player extends Ball {
             particle.radius = 3;
             particle.fadeSpeed = 0.04;
             clouds.push(particle);
+        }
+
+        // Turn ball spiky if damage is 10 or more and ball isn't already spiky
+        if (amount >= 10 && !this.isSpiky && !this.broken && !this.isPlayer) {  // Added !this.isPlayer check
+            // Store current velocity but increase it for more dynamic movement
+            const oldDx = this.dx * 1.5;
+            const oldDy = this.dy * 1.5;
+
+            // Create transformation effect
+            for (let i = 0; i < 360; i += 30) {
+                const angle = (i * Math.PI) / 180;
+                const shockwave = new Cloud(this.x, this.y);
+                shockwave.color = '#FFFFFF';
+                shockwave.dx = Math.cos(angle) * 12;
+                shockwave.dy = Math.sin(angle) * 12;
+                shockwave.radius = 2;
+                shockwave.fadeSpeed = 0.04;
+                clouds.push(shockwave);
+            }
+
+            // Make the ball spiky and set its movement
+            this.isSpiky = true;
+            this.spikyTimer = 600; // 10 seconds at 60fps
+            this.dx = oldDx * 0.25; // Quarter the speed for spiky balls (changed from 0.5)
+            this.dy = oldDy * 0.25;
+            this.rotationSpeed = 0.3; // Fast rotation speed
+            this.health = 500; // Set health to 500 when becoming spiky
+            this.broken = false; // Ensure the ball isn't marked as broken when becoming spiky
+            
+            // Add blood stain
+            const bloodStain = new BloodStain(this.x, this.y, this.color);
+            bloodStains.push(bloodStain);
+            return;
+        }
+
+        // Critical health explosion effect (at 10 health or below)
+        if (this.health <= 10 && !this.broken && !this.isSpiky) {
+            // Create intense explosion effect
+            for (let i = 0; i < 30; i++) {
+                // Create circular burst of particles
+                const angle = (Math.PI * 2 * i) / 30;
+                const speed = 10 + Math.random() * 5;
+                const distance = 30 + Math.random() * 20;
+                
+                const particle = new Cloud(
+                    this.x + Math.cos(angle) * distance,
+                    this.y + Math.sin(angle) * distance
+                );
+                
+                // Alternate between red and orange for fire effect
+                particle.color = i % 2 === 0 ? '#FF4500' : '#FF0000';
+                particle.dx = Math.cos(angle) * speed;
+                particle.dy = Math.sin(angle) * speed;
+                particle.radius = 5;
+                particle.fadeSpeed = 0.02;
+                clouds.push(particle);
+            }
+
+            // Add smoke effect
+            for (let i = 0; i < 15; i++) {
+                const smoke = new Cloud(this.x, this.y);
+                smoke.color = '#808080';
+                smoke.dx = (Math.random() - 0.5) * 3;
+                smoke.dy = (Math.random() - 0.5) * 3;
+                smoke.radius = 15;
+                smoke.fadeSpeed = 0.01;
+                clouds.push(smoke);
+            }
+
+            // Add shockwave effect
+            for (let i = 0; i < 360; i += 20) {
+                const angle = (i * Math.PI) / 180;
+                const shockwave = new Cloud(this.x, this.y);
+                shockwave.color = '#FFD700';
+                shockwave.dx = Math.cos(angle) * 15;
+                shockwave.dy = Math.sin(angle) * 15;
+                shockwave.radius = 2;
+                shockwave.fadeSpeed = 0.04;
+                clouds.push(shockwave);
+            }
+
+            // Screen shake effect
+            canvas.style.transform = 'translate(5px, 5px)';
+            setTimeout(() => {
+                canvas.style.transform = 'translate(-5px, -5px)';
+                setTimeout(() => {
+                    canvas.style.transform = 'translate(0, 0)';
+                }, 50);
+            }, 50);
         }
 
         // Check if player died
@@ -1341,6 +1785,18 @@ class Player extends Ball {
             }
         });
 
+        // Deal 100 damage with ball explosion
+        balls.forEach(ball => {
+            if (ball !== this && ball.isPlayer) {
+                const dx = ball.x - this.x;
+                const dy = ball.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < this.radius * 3) {  // Explosion radius
+                    ball.takeDamage(100);
+                }
+            }
+        });
+
         this.explosionCooldown = 60;  // 1 second cooldown
     }
 
@@ -1402,6 +1858,30 @@ class Player extends Ball {
         
         // Create vanish effect
         this.createInvisibilityEffect('#9400D3');
+
+        // Deal damage to nearby spiky balls
+        balls.forEach(ball => {
+            if (ball.isSpiky) {
+                const dx = ball.x - this.x;
+                const dy = ball.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < this.radius * 4) {  // Damage spiky balls within range
+                    ball.takeDamage(20);  // Deal 20 damage to spiky balls
+                    
+                    // Create damage effect
+                    for (let i = 0; i < 8; i++) {
+                        const particle = new Cloud(ball.x, ball.y);
+                        particle.color = '#9400D3';  // Purple damage effect
+                        particle.dx = (Math.random() - 0.5) * 8;
+                        particle.dy = (Math.random() - 0.5) * 8;
+                        particle.radius = 3;
+                        particle.fadeSpeed = 0.04;
+                        clouds.push(particle);
+                    }
+                }
+            }
+        });
     }
 
     createInvisibilityEffect(color) {
@@ -1418,22 +1898,53 @@ class Player extends Ball {
         }
     }
 
-    throwWaterSpear() {
+    toggleWaterSpears() {
         if (this.waterSpearCooldown > 0) return;
-
-        // Launch all orbiting spears
-        this.waterSpears.forEach(spear => {
-            spear.isOrbiting = false;
-            spear.dx = Math.cos(spear.angle) * spear.speed;
-            spear.dy = Math.sin(spear.angle) * spear.speed;
-        });
-
-        // Create new orbiting spears
-        for (let i = 0; i < this.maxWaterSpears; i++) {
-            const angle = (Math.PI * 2 * i) / this.maxWaterSpears;
-            this.waterSpears.push(new WaterSpear(this.x, this.y, angle));
+        
+        if (!this.waterSpearActive) {
+            // Create new orbiting spears
+            for (let i = 0; i < this.maxWaterSpears; i++) {
+                const angle = (Math.PI * 2 * i) / this.maxWaterSpears;
+                this.waterSpears.push(new WaterSpear(this.x, this.y, angle));
+            }
+            this.waterSpearActive = true;
+            
+            // Create activation effect
+            for (let i = 0; i < 15; i++) {
+                const particle = new Cloud(this.x, this.y);
+                particle.color = '#00CED1';  // Turquoise color
+                const angle = (Math.PI * 2 * i) / 15;
+                const speed = 6;
+                particle.dx = Math.cos(angle) * speed;
+                particle.dy = Math.sin(angle) * speed;
+                particle.radius = 4;
+                particle.fadeSpeed = 0.03;
+                clouds.push(particle);
+            }
+        } else {
+            // Launch all orbiting spears
+            this.waterSpears.forEach(spear => {
+                spear.isOrbiting = false;
+                spear.dx = Math.cos(spear.angle) * spear.speed;
+                spear.dy = Math.sin(spear.angle) * spear.speed;
+            });
+            
+            // Create launch effect
+            for (let i = 0; i < 10; i++) {
+                const particle = new Cloud(this.x, this.y);
+                particle.color = '#87CEEB';  // Sky blue color
+                const angle = (Math.PI * 2 * i) / 10;
+                const speed = 8;
+                particle.dx = Math.cos(angle) * speed;
+                particle.dy = Math.sin(angle) * speed;
+                particle.radius = 3;
+                particle.fadeSpeed = 0.04;
+                clouds.push(particle);
+            }
+            
+            this.waterSpearActive = false;
         }
-
+        
         this.waterSpearCooldown = 30;  // 0.5 second cooldown
     }
 }
@@ -1443,11 +1954,32 @@ const keys = {};
 window.addEventListener('keydown', e => {
     keys[e.key.toLowerCase()] = true;
     
-    // Switch active player with G
-    if (e.key.toLowerCase() === 'g') {
+    // Switch active player with G only if switching is allowed
+    if (e.key.toLowerCase() === 'g' && canSwitchPlayers) {
         e.preventDefault();
         activePlayer = (activePlayer === player) ? player2 : player;
         createSwitchEffect(activePlayer);
+    }
+    
+    // Speed boost toggle for player 2 with X key
+    if (e.key.toLowerCase() === 'x' && activePlayer === player2 && activePlayer.speedBoostCooldown <= 0) {
+        e.preventDefault();
+        activePlayer.speedBoostActive = !activePlayer.speedBoostActive;  // Toggle the boost
+        activePlayer.speed = activePlayer.speedBoostActive ? activePlayer.boostedSpeed : activePlayer.normalSpeed;
+        activePlayer.speedBoostCooldown = 30; // Half second cooldown between toggles
+        
+        // Create speed boost effect
+        for (let i = 0; i < 12; i++) {
+            const particle = new Cloud(activePlayer.x, activePlayer.y);
+            particle.color = activePlayer.speedBoostActive ? '#00FFFF' : '#FF4444';  // Cyan for boost, red for deactivate
+            const angle = (Math.PI * 2 * i) / 12;
+            const speed = 8;
+            particle.dx = Math.cos(angle) * speed;
+            particle.dy = Math.sin(angle) * speed;
+            particle.radius = 3;
+            particle.fadeSpeed = 0.04;
+            clouds.push(particle);
+        }
     }
     
     // Use activePlayer for all controls
@@ -1460,12 +1992,15 @@ window.addEventListener('keydown', e => {
     } else if (e.key.toLowerCase() === 'e') {
         e.preventDefault();
         activePlayer.teleport();
-    } else if (e.key === 'Shift') {
+    } else if (e.key.toLowerCase() === 'l') {  // Add invisibility for L key
         e.preventDefault();
         activePlayer.activateInvisibility();
-    } else if (e.key.toLowerCase() === 'j' && activePlayer === player2) {  // Add this for water spears
+    } else if (e.key.toLowerCase() === 'j' && activePlayer === player2) {  // Toggle water spears with J
         e.preventDefault();
-        activePlayer.throwWaterSpear();
+        activePlayer.toggleWaterSpears();
+    } else if (e.key.toLowerCase() === 'f' && activePlayer === player2) {  // Launch water spears with F
+        e.preventDefault();
+        activePlayer.launchWaterSpears();
     }
 });
 window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
@@ -1573,8 +2108,10 @@ class Shuriken {
                 clouds.push(spark);
             }
             
-            // Break the ball
-            ball.broken = true;
+            // Deal 5 damage with shuriken
+            if (ball.isPlayer) {
+                ball.takeDamage(5);
+            }
             return true;
         }
         return false;
@@ -1689,7 +2226,10 @@ class FireTrident {
                 clouds.push(spark);
             }
             
-            ball.broken = true;
+            // Deal 20 damage with trident
+            if (ball.isPlayer) {
+                ball.takeDamage(20);
+            }
             return true;
         }
         return false;
@@ -1934,15 +2474,224 @@ class WaterSpear {
                 clouds.push(splash);
             }
             
-            // 50% chance to break, otherwise freeze
-            if (Math.random() < 0.5) {
-                ball.broken = true;
+            if (ball.isPlayer) {
+                ball.takeDamage(40);  // Deal 40 damage to players
             } else {
-                ball.frozen = true;
-                ball.frozenTimer = 180;  // Freeze for 3 seconds
+                // Random number between 0 and 1
+                const chance = Math.random();
+                
+                if (chance < 0.7) {  // 70% chance to freeze
+                    ball.frozen = true;
+                    ball.frozenTimer = 180;  // Freeze for 3 seconds
+                    
+                    // Add freeze effect
+                    for (let i = 0; i < 12; i++) {
+                        const iceParticle = new Cloud(ball.x, ball.y);
+                        iceParticle.color = '#87CEEB';  // Light blue for ice
+                        const angle = (Math.PI * 2 * i) / 12;
+                        const speed = 6;
+                        iceParticle.dx = Math.cos(angle) * speed;
+                        iceParticle.dy = Math.sin(angle) * speed;
+                        iceParticle.radius = 4;
+                        iceParticle.fadeSpeed = 0.03;
+                        clouds.push(iceParticle);
+                    }
+                } else if (chance < 0.9) {  // 20% chance to break
+                    ball.broken = true;
+                    
+                    // Add break effect
+                    for (let i = 0; i < 15; i++) {
+                        const breakParticle = new Cloud(ball.x, ball.y);
+                        breakParticle.color = '#B0E0E6';  // Powder blue for break
+                        breakParticle.dx = (Math.random() - 0.5) * 12;
+                        breakParticle.dy = (Math.random() - 0.5) * 12;
+                        breakParticle.radius = 3;
+                        breakParticle.fadeSpeed = 0.04;
+                        clouds.push(breakParticle);
+                    }
+                } else {  // 10% chance to deflect
+                    // Reverse and increase ball's velocity
+                    ball.dx = -ball.dx * 1.5;
+                    ball.dy = -ball.dy * 1.5;
+                    
+                    // Add deflect effect
+                    for (let i = 0; i < 10; i++) {
+                        const deflectParticle = new Cloud(ball.x, ball.y);
+                        deflectParticle.color = '#E0FFFF';  // Light cyan for deflect
+                        const angle = (Math.PI * 2 * i) / 10;
+                        const speed = 10;
+                        deflectParticle.dx = Math.cos(angle) * speed;
+                        deflectParticle.dy = Math.sin(angle) * speed;
+                        deflectParticle.radius = 3;
+                        deflectParticle.fadeSpeed = 0.05;
+                        clouds.push(deflectParticle);
+                    }
+                }
             }
             return true;
         }
         return false;
     }
-} 
+}
+
+// Party joining functionality
+const hostPartyBtn = document.querySelector('.host-party-btn');
+const joinPartyBtn = document.querySelector('.join-party-btn');
+const partyInterface = document.querySelector('.party-interface');
+const codeInput = document.querySelector('.code-input');
+const hostCodeDisplay = document.querySelector('.host-code-display');
+const joinCodeInput = document.querySelector('.join-code-input');
+const codeDisplayDiv = document.querySelector('.code-display');
+const partyHeader = document.querySelector('.party-header');
+const characterSelects = document.querySelectorAll('.character-select');
+
+let partyCode = null;
+let selectedCharacter = null;
+let isHost = false;
+let hostSelectedCharacter = null;
+
+let canSwitchPlayers = true; // Add this variable to control player switching
+
+hostPartyBtn.addEventListener('click', () => {
+    isHost = true;
+    partyInterface.style.display = 'block';
+    hostCodeDisplay.style.display = 'block';
+    joinCodeInput.style.display = 'none';
+    partyHeader.textContent = 'Host a Party';
+    
+    // Generate 5-digit code
+    partyCode = Math.floor(10000 + Math.random() * 90000);
+    codeDisplayDiv.textContent = partyCode;
+});
+
+joinPartyBtn.addEventListener('click', () => {
+    isHost = false;
+    partyInterface.style.display = 'block';
+    hostCodeDisplay.style.display = 'none';
+    joinCodeInput.style.display = 'block';
+    partyHeader.textContent = 'Join a Party';
+});
+
+codeInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        const enteredCode = parseInt(codeInput.value);
+        if (enteredCode === partyCode) {
+            if (hostSelectedCharacter) {
+                // Show character selection for joiner with only the remaining option
+                const joinerCharacterSelect = joinCodeInput.querySelector('.character-select');
+                joinerCharacterSelect.style.display = 'block';
+                const options = joinerCharacterSelect.querySelectorAll('.character-option');
+                
+                options.forEach(option => {
+                    if (option.dataset.character === hostSelectedCharacter) {
+                        option.style.display = 'none';
+                    } else {
+                        option.style.display = 'block';
+                    }
+                });
+            } else {
+                alert('Please wait for the host to select their character first!');
+            }
+        }
+    
+    }
+});
+
+// Update character selection logic to disable switching for player 2
+characterSelects.forEach(select => {
+    const options = select.querySelectorAll('.character-option');
+    options.forEach(option => {
+        option.addEventListener('click', () => {
+            selectedCharacter = option.dataset.character;
+            if (isHost) {
+                hostSelectedCharacter = selectedCharacter;
+                canSwitchPlayers = true; // Host can switch players
+            } else {
+                canSwitchPlayers = false; // Player 2 cannot switch players
+            }
+            partyInterface.style.display = 'none';
+            
+            // Initialize the game with the selected character
+            if (selectedCharacter === 'knight') {
+                activePlayer = player;
+                player.color = '#C0C0C0';  // Silver for Knight
+            } else if (selectedCharacter === 'mage') {
+                activePlayer = player2;
+                player2.color = '#9370DB';  // Purple for Mage
+            }
+        });
+    });
+});
+
+class GoldenSpear {
+    constructor(x, y, angle) {
+        this.x = x;
+        this.y = y;
+        this.angle = angle;
+        this.speed = 15;
+        this.width = 40;
+        this.height = 8;
+        this.active = true;
+    }
+
+    draw(ctx) {
+        if (!this.active) return;
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+
+        // Draw spear shaft
+        ctx.fillStyle = '#FFD700'; // Golden color
+        ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
+
+        // Draw spear tip
+        ctx.beginPath();
+        ctx.moveTo(this.width/2, 0);
+        ctx.lineTo(this.width/2 + 15, -this.height);
+        ctx.lineTo(this.width/2 + 25, 0);
+        ctx.lineTo(this.width/2 + 15, this.height);
+        ctx.closePath();
+        ctx.fillStyle = '#DAA520'; // Darker gold for the tip
+        ctx.fill();
+
+        // Add glow effect
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur = 15;
+        ctx.strokeStyle = '#FFF8DC';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    update() {
+        if (!this.active) return;
+
+        this.x += Math.cos(this.angle) * this.speed;
+        this.y += Math.sin(this.angle) * this.speed;
+
+        // Check if spear is out of bounds
+        if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+            this.active = false;
+        }
+    }
+
+    checkCollision(ball) {
+        if (!this.active || ball.broken || ball.inBin) return false;
+
+        const dx = ball.x - this.x;
+        const dy = ball.y - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < ball.radius + 20) {
+            this.active = false;
+            ball.takeDamage(200);
+            // Apply weakness effect
+            ball.isWeakened = true;
+            ball.weakenedTimer = 300; // 5 seconds at 60 FPS
+            return true;
+        }
+        return false;
+    }
+}
